@@ -5,9 +5,12 @@ networks:
     driver: bridge
   backend-net:
     internal: true
+  monitoring-net:
+    driver: bridge
 
 volumes:
   db_data:
+  grafana_data:
 
 services:
   nginx:
@@ -39,6 +42,7 @@ services:
     networks:
       - frontend-net
       - backend-net
+      - monitoring-net
     depends_on:
       db:
         condition: service_healthy
@@ -75,3 +79,50 @@ services:
       - backend-net
     depends_on:
       - db
+
+  # --- CÁC DỊCH VỤ GIÁM SÁT (COMMIT 2) ---
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: prometheus
+    restart: always
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: always
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring-net
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: mysqld-exporter
+    restart: always
+    environment:
+      DATA_SOURCE_NAME: "student_user:Strong_Student_Pass2026!@(db:3306)/student_db"
+    networks:
+      - backend-net
+      - monitoring-net
+    depends_on:
+      - db
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring-net
